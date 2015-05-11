@@ -1,85 +1,73 @@
 package com.redsift.jmap.importer;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 
+import org.apache.commons.cli.CommandLine;
+
 import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.Bin;
-import com.aerospike.client.Key;
-import com.aerospike.client.Operation;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.CommitLevel;
-import com.aerospike.client.policy.RecordExistsAction;
-import com.aerospike.client.policy.WritePolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.jmap.converter.JMAPMessageConverter;
-import com.jmap.utils.JMAPFileUtils;
 import com.pff.PSTException;
+import com.pff.PSTFile;
 import com.pff.PSTFolder;
 import com.pff.PSTMessage;
+import com.redsift.jmap.importer.utils.AerospikeFacade;
+import com.redsift.jmap.importer.utils.CLIFacade;
 
 public class PSTImporter {
 
-	private final String OUTPUT_DIRECTORY = "output/";
-	private List<String> folderPath = new ArrayList<String>();
-
-	private static final String AEROSPIKE_NAMESPACE =  "test";
-	private static final String AEROSPIKE_METADATA_SET = "metadata";
-	private static final String AEROSPIKE_SEQ_KEY = "seq";
-
-	private static final String AEROSPIKE_LAST_BIN = "last";
+	// private final String OUTPUT_DIRECTORY = "output/";
+	private String attachmentsFolder;
+	private AerospikeClient client;
+	private String namespace;
+	private String set;
 
 	public static void main(String[] args) {
-		AerospikeClient client = new AerospikeClient(null, "localhost", 3000);
-		
-		// Get new JobID
-		Key kseq = new Key(PSTImporter.AEROSPIKE_NAMESPACE, PSTImporter.AEROSPIKE_METADATA_SET, PSTImporter.AEROSPIKE_SEQ_KEY);
-		Bin lbin = new Bin(PSTImporter.AEROSPIKE_LAST_BIN, (long)1);
-		
-		Record rec = client.operate(null, kseq, Operation.add(lbin), Operation.get());
-		Long id = (Long)rec.bins.get(lbin.name);
-		
-		System.out.format("Id: %s%n", id.toString());
-			
-		Key key = new Key(PSTImporter.AEROSPIKE_NAMESPACE, "test-set", id.toString());
-		Bin binStatus = new Bin("status", "READY");
-		Bin binBody = new Bin("body", "<JSON>");
-		
-		
-		System.out.format("Single Bin Put: namespace=%s set=%s key=%s bin=%s value=%s bin=%s value=%s%n",
-			key.namespace, key.setName, key.userKey, binStatus.name, binStatus.value, binBody.name, binBody.value);
-		
-		WritePolicy writePolicy = new WritePolicy();
-		writePolicy.commitLevel = CommitLevel.COMMIT_MASTER;
-		writePolicy.sendKey = true;
-		writePolicy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
+		try {
+			CLIFacade cli = new CLIFacade(args);
+			CommandLine cmd = cli.parse();
+			if (cmd != null) {
+				String host = "localhost";
+				int port = 3000;
+				String attFolder = null;
+				if (cmd.hasOption("h")) {
+					host = cmd.getOptionValue("h");
+				}
+				if (cmd.hasOption("p")) {
+					port = (Integer) cmd.getParsedOptionValue("p");
+				}
+				if (cmd.hasOption("a")) {
+					attFolder = cmd.getOptionValue("a");
+				}
+				String namespace = cmd.getOptionValue("n");
+				String set = cmd.getOptionValue("s");
+				String file = cmd.getOptionValue("f");
 
-		client.put(writePolicy, key, binStatus, binBody);
+				// Create Aerospike client with default policy
+				AerospikeClient client = AerospikeFacade.createClient(host,
+						port);
 
-		System.out.format("Single Bin Get: namespace=%s set=%s key=%s%n", key.namespace, key.setName, key.userKey);
-
-		Record record = client.get(null, key);
-		
-		if (record == null) {
-			System.out.format(
-					"Failed to get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey);
+				PSTImporter importer = new PSTImporter(client, namespace, set,
+						attFolder);
+				PSTFile pstFile = new PSTFile(file);
+				importer.processFolder(pstFile.getMessageStore()
+						.getDisplayName(), pstFile.getRootFolder());
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
 		}
+	}
 
-		System.out.println(record.toString());
-		
-		client.close();
-		
-//		try {
-//			TestJMAP importer = new TestJMAP();
-//			PSTFile pstFile = new PSTFile(args[0]);
-//			importer.processFolder(pstFile.getMessageStore().getDisplayName(),
-//					pstFile.getRootFolder());
-//		} catch (Exception err) {
-//			err.printStackTrace();
-//		}
+	private List<String> folderPath = new ArrayList<String>();
+
+	public PSTImporter(AerospikeClient client, String namespace, String set,
+			String attachmentsFolder) {
+		this.client = client;
+		this.namespace = namespace;
+		this.set = set;
+		this.attachmentsFolder = attachmentsFolder;
 	}
 
 	public void processFolder(String mboxName, PSTFolder folder)
@@ -103,19 +91,31 @@ public class PSTImporter {
 		if (folder.getContentCount() > 0) {
 			PSTMessage email = (PSTMessage) folder.getNextChild();
 			while (email != null) {
-				System.out.println("Processing: " + email.toString());
+				//System.out.println("Processing: " + email.toString());
 				ObjectMapper mapper = new ObjectMapper();
 
 				// TODO: remove indentation from production system
-				mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
-				mapper.configure(
-						SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
-				mapper.writeValue(
-						new File(OUTPUT_DIRECTORY
-								+ JMAPFileUtils.sha256(email
-										.getInternetMessageId())),
-						JMAPMessageConverter.getJMAPMessageWithAttachments(
-								mboxName, email, folderPath, OUTPUT_DIRECTORY));
+				// mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
+				// mapper.configure(
+				// SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+				String msg = null;
+				if (this.attachmentsFolder != null) {
+					msg = mapper.writeValueAsString(JMAPMessageConverter
+							.getJMAPMessageWithAttachments(mboxName, email,
+									folderPath, attachmentsFolder));
+				} else {
+					msg = mapper.writeValueAsString(JMAPMessageConverter
+							.getJMAPMessageWithoutAttachments(mboxName, email,
+									folderPath));
+				}
+				AerospikeFacade.putMessage(this.client, this.namespace,
+						this.set, msg);
+
+				// DEBUG: Write message to file
+				// mapper.writeValue(
+				// new File(attachmentsFolder
+				// + JMAPFileUtils.sha256(email
+				// .getInternetMessageId())), msg);
 
 				email = (PSTMessage) folder.getNextChild();
 			}
@@ -126,5 +126,4 @@ public class PSTImporter {
 			folderPath.remove(folderPath.size() - 1);
 		}
 	}
-
 }
