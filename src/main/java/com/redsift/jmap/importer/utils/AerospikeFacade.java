@@ -54,7 +54,7 @@ public class AerospikeFacade {
 		Record rec = client.operate(null, kseq, Operation.add(lbin),
 				Operation.get());
 		Long id = (Long) rec.bins.get(lbin.name);
-		System.out.format("Id: %s%n", id.toString());
+		// System.out.format("Id: %s%n", id.toString());
 		return id;
 	}
 	
@@ -64,11 +64,11 @@ public class AerospikeFacade {
 		Bin binStatus = new Bin("status", "READY");
 		Bin binBody = new Bin("body", message);
 
-		System.out
-				.format("Single Bin Put: namespace=%s set=%s key=%s bin=%s value=%s bin=%s value=%s%n",
-						key.namespace, key.setName, key.userKey,
-						binStatus.name, binStatus.value, binBody.name,
-						binBody.value);
+		//System.out
+		//		.format("Single Bin Put: namespace=%s set=%s key=%s bin=%s value=%s bin=%s value=%s%n",
+		//				key.namespace, key.setName, key.userKey,
+		//				binStatus.name, binStatus.value, binBody.name,
+		//				binBody.value);
 
 		WritePolicy writePolicy = new WritePolicy();
 		writePolicy.commitLevel = CommitLevel.COMMIT_MASTER;
@@ -78,7 +78,7 @@ public class AerospikeFacade {
 		client.put(writePolicy, key, binStatus, binBody);
 
 		// DEBUG
-		Record r = client.get(null, key);
-		System.out.println(r.toString());
+		// Record r = client.get(null, key);
+		// System.out.format("Got: %s%n", r.toString());
 	}
 }
