@@ -69,11 +69,7 @@ public class AerospikeFacade {
 
 		// Compress Message
 		LZ4Compressor compressor = factory.fastCompressor();
-		int maxCompressedLength = compressor.maxCompressedLength(message
-				.length());
-		byte[] compressedMsg = new byte[maxCompressedLength];
-		int compressedLength = compressor.compress(message.getBytes(), 0,
-				message.length(), compressedMsg, 0, maxCompressedLength);
+		byte[] compressedMsg = compressor.compress(message.getBytes());
 
 		// DEBUG: Compression ratios
 		//double compression = (double) compressedLength
@@ -100,10 +96,10 @@ public class AerospikeFacade {
 		writePolicy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
 
 		// Skip messages > 1MB (Aerospike limitation)
-		if (compressedLength > (1024 * 1024)) {
+		if (compressedMsg.length > (1024 * 1024)) {
 			// DEBUG: Large messages
 			// Shouldn't happen though as they are now compressed
-			System.out.format("Skipped message. Size: %d%n", compressedLength);
+			System.out.format("Skipped message. Size: %d%n", compressedMsg.length);
 		} else {
 			client.put(writePolicy, key, binStatus, binBody);
 		}
