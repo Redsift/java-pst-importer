@@ -1,5 +1,8 @@
 package com.redsift.jmap.importer.utils;
 
+import net.jpountz.lz4.LZ4Compressor;
+import net.jpountz.lz4.LZ4Factory;
+
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Bin;
@@ -30,24 +33,26 @@ public class AerospikeFacade {
 	 * @param port
 	 * @throws AerospikeException
 	 */
-	public static AerospikeClient createClient(String host, int port) throws AerospikeException {
+	public static AerospikeClient createClient(String host, int port)
+			throws AerospikeException {
 		return new AerospikeClient(null, host, port);
 	}
-	
+
 	public static void closeClient(AerospikeClient client) {
 		client.close();
 	}
-	
-	/** 
+
+	/**
 	 * Get new JobId for a given namespace
+	 * 
 	 * @param namespace
 	 * @return
 	 * @throws AerospikeException
 	 */
-	
-	private static Long getJobId(AerospikeClient client, String namespace) throws AerospikeException {
-		Key kseq = new Key(namespace,
-				AerospikeFacade.AEROSPIKE_METADATA_SET,
+
+	private static Long getJobId(AerospikeClient client, String namespace)
+			throws AerospikeException {
+		Key kseq = new Key(namespace, AerospikeFacade.AEROSPIKE_METADATA_SET,
 				AerospikeFacade.AEROSPIKE_SEQ_KEY);
 		Bin lbin = new Bin(AerospikeFacade.AEROSPIKE_LAST_BIN, (long) 1);
 
@@ -57,27 +62,53 @@ public class AerospikeFacade {
 		// System.out.format("Id: %s%n", id.toString());
 		return id;
 	}
-	
-	public static void putMessage(AerospikeClient client, String namespace, String set, String message) {
-		Key key = new Key(namespace, set,
-				getJobId(client, namespace).toString());
-		Bin binStatus = new Bin("status", "READY");
-		Bin binBody = new Bin("body", message);
 
-		//System.out
-		//		.format("Single Bin Put: namespace=%s set=%s key=%s bin=%s value=%s bin=%s value=%s%n",
-		//				key.namespace, key.setName, key.userKey,
-		//				binStatus.name, binStatus.value, binBody.name,
-		//				binBody.value);
+	public static void putMessage(AerospikeClient client, String namespace,
+			String set, String message) {
+		LZ4Factory factory = LZ4Factory.fastestInstance();
+
+		// Compress Message
+		LZ4Compressor compressor = factory.fastCompressor();
+		int maxCompressedLength = compressor.maxCompressedLength(message
+				.length());
+		byte[] compressedMsg = new byte[maxCompressedLength];
+		int compressedLength = compressor.compress(message.getBytes(), 0,
+				message.length(), compressedMsg, 0, maxCompressedLength);
+
+		// DEBUG: Compression ratios
+		//double compression = (double) compressedLength
+		//		/ (double) message.length();
+		//System.out.format("Compression: %s (%d -> %d)%n",
+		//		MessageFormat.format("{0,number,#.##%}", compression),
+		//		message.length(), compressedLength);
+
+		Key key = new Key(namespace, set,
+		getJobId(client, namespace).toString());
+		Bin binStatus = new Bin("status", "READY");
+		Bin binBody = new Bin("body", compressedMsg);
+
+		// DEBUG: Put operation
+		// System.out
+		// .format("Single Bin Put: namespace=%s set=%s key=%s bin=%s value=%s bin=%s value=%s%n",
+		// key.namespace, key.setName, key.userKey,
+		// binStatus.name, binStatus.value, binBody.name,
+		// binBody.value);
 
 		WritePolicy writePolicy = new WritePolicy();
 		writePolicy.commitLevel = CommitLevel.COMMIT_MASTER;
 		writePolicy.sendKey = true;
 		writePolicy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
 
-		client.put(writePolicy, key, binStatus, binBody);
-
-		// DEBUG
+		// Skip messages > 1MB (Aerospike limitation)
+		if (compressedLength > (1024 * 1024)) {
+			// DEBUG: Large messages
+			// Shouldn't happen though as they are now compressed
+			System.out.format("Skipped message. Size: %d%n", compressedLength);
+		} else {
+			client.put(writePolicy, key, binStatus, binBody);
+		}
+		
+		// DEBUG: Get the record just written
 		// Record r = client.get(null, key);
 		// System.out.format("Got: %s%n", r.toString());
 	}

@@ -43,7 +43,12 @@ public class PSTImporter {
 				}
 				String namespace = cmd.getOptionValue("n");
 				String set = cmd.getOptionValue("s");
-				String file = cmd.getOptionValue("f");
+				String[] files = null;
+				if (cmd.hasOption("f")) {
+					files = new String[] { cmd.getOptionValue("f") };
+				} else {
+					files = cli.parseInventoryFile(cmd.getOptionValue("i"));
+				}
 
 				// Create Aerospike client with default policy
 				AerospikeClient client = AerospikeFacade.createClient(host,
@@ -51,9 +56,12 @@ public class PSTImporter {
 
 				PSTImporter importer = new PSTImporter(client, namespace, set,
 						attFolder);
-				PSTFile pstFile = new PSTFile(file);
-				importer.processFolder(pstFile.getMessageStore()
-						.getDisplayName(), pstFile.getRootFolder());
+				for (int i = 0; i < files.length; i++) {
+					PSTFile pstFile = new PSTFile(files[i]);
+					System.out.format("Processing file: %s%n", files[i]);
+					importer.processFolder(pstFile.getMessageStore()
+							.getDisplayName(), pstFile.getRootFolder());
+				}
 			}
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -91,7 +99,7 @@ public class PSTImporter {
 		if (folder.getContentCount() > 0) {
 			PSTMessage email = (PSTMessage) folder.getNextChild();
 			while (email != null) {
-				//System.out.println("Processing: " + email.toString());
+				// System.out.println("Processing: " + email.toString());
 				ObjectMapper mapper = new ObjectMapper();
 
 				// TODO: remove indentation from production system

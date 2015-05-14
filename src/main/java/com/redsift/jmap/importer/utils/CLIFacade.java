@@ -1,5 +1,10 @@
 package com.redsift.jmap.importer.utils;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.Scanner;
+
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -20,12 +25,13 @@ public class CLIFacade {
 	private Options options = new Options();
 
 	public CLIFacade(String args[]) {
-		options.addOption("a", true, "Whether to parse attachments and folder name where to store them.");
+		options.addOption("a", true,
+				"Whether to parse attachments and folder name where to store them.");
 		options.addOption("f", true, "The PST file to import.");
+		options.addOption("i", true, "The PST file inventory to import.");
 		options.addOption("n", true, "Aerospike namespace.");
 		options.addOption("s", true, "Aerospike set name.");
-		options.addOption("h", true,
-				"Aerospike hostname. Default: localhost");
+		options.addOption("h", true, "Aerospike hostname. Default: localhost");
 		options.addOption("p", true, "Aerospike port. Default: 3000");
 		options.addOption("help", true, "Displays this help");
 
@@ -41,8 +47,9 @@ public class CLIFacade {
 				help();
 				return null;
 			}
-			// Needs to have a file at least
-			if (!cmd.hasOption("f") || !cmd.hasOption("n") || !cmd.hasOption("s")) {
+			// Needs to have a file or inventory at least
+			if (!(cmd.hasOption("f") ^ cmd.hasOption("i"))
+					|| !cmd.hasOption("n") || !cmd.hasOption("s")) {
 				help();
 				return null;
 			}
@@ -51,6 +58,23 @@ public class CLIFacade {
 			help();
 		}
 		return cmd;
+	}
+
+	public String[] parseInventoryFile(String name)
+			throws FileNotFoundException {
+		ArrayList<String> inventory = new ArrayList<String>();
+		File file = new File(name);
+		Scanner input = new Scanner(file);
+
+		while (input.hasNext()) {
+			String item = input.nextLine().trim();
+			if (!item.isEmpty()) {
+				inventory.add(item);
+			}
+		}
+		input.close();
+
+		return inventory.toArray(new String[0]);
 	}
 
 	private void help() {
