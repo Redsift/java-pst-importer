@@ -61,6 +61,7 @@ public class PSTImporter {
 					System.out.format("Processing file: %s%n", files[i]);
 					importer.processFolder(pstFile.getMessageStore()
 							.getDisplayName(), pstFile.getRootFolder());
+					System.out.format("msgTotal: %d compTotal: %d%n", AerospikeFacade.msgTotal, AerospikeFacade.compTotal);
 				}
 			}
 		} catch (Exception ex) {

@@ -63,6 +63,10 @@ public class AerospikeFacade {
 		return id;
 	}
 
+	// DEBUG total compression counters
+	public static long msgTotal = 0;
+	public static long compTotal = 0;
+	
 	public static void putMessage(AerospikeClient client, String namespace,
 			String set, String message) {
 		LZ4Factory factory = LZ4Factory.fastestInstance();
@@ -71,8 +75,12 @@ public class AerospikeFacade {
 		LZ4Compressor compressor = factory.fastCompressor();
 		byte[] compressedMsg = compressor.compress(message.getBytes());
 
+		// DEBUG increment total compression counters
+		msgTotal += message.length();
+		compTotal += compressedMsg.length;
+		
 		// DEBUG: Compression ratios
-		//double compression = (double) compressedLength
+		//double compression = (double) compressedMsg.length
 		//		/ (double) message.length();
 		//System.out.format("Compression: %s (%d -> %d)%n",
 		//		MessageFormat.format("{0,number,#.##%}", compression),
