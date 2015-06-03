@@ -27,6 +27,8 @@ public class CLIFacade {
 	public CLIFacade(String args[]) {
 		options.addOption("a", true,
 				"Whether to parse attachments and folder name where to store them.");
+		options.addOption("o", true,
+				"Whether to write messages to file rather than Aerospike and folder name where to store them.");
 		options.addOption("f", true, "The PST file to import.");
 		options.addOption("i", true, "The PST file inventory to import.");
 		options.addOption("n", true, "Aerospike namespace.");
@@ -48,8 +50,7 @@ public class CLIFacade {
 				return null;
 			}
 			// Needs to have a file or inventory at least
-			if (!(cmd.hasOption("f") ^ cmd.hasOption("i"))
-					|| !cmd.hasOption("n") || !cmd.hasOption("s")) {
+			if (!(cmd.hasOption("f") ^ cmd.hasOption("i"))) {
 				help();
 				return null;
 			}
